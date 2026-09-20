@@ -152,10 +152,27 @@ float hash21(vec2 p) {
 }
 
 /**
- * Backward map for the displayed pixel. Each handle is one step of Gustafsson's
- * local image warp: the pixel at c + d takes the value that was at c, with a
- * squared falloff that reaches zero on the circle of radius r, so handles stay
- * local and compose without tearing.
+ * Falloff for every warp handle: 1 at the centre, 0 on the circle of radius r,
+ * and — the part that matters — zero slope at both ends.
+ *
+ * The textbook local warp (Gustafsson) uses (r^2-d^2)/(r^2-d^2+|m|^2) squared
+ * instead, which is steep at the rim: measured against the axial backward map,
+ * it is non-monotonic for every displacement below about 0.55r, folding by as
+ * much as 0.05r and leaving a faint ring inside each handle. A falloff that is
+ * flat at the rim cannot do that, and stays injective out to |m| = 2r/3.
+ */
+float warpFalloff(float t) {
+  return 1.0 - t * t * (3.0 - 2.0 * t);
+}
+
+/**
+ * Backward map for the displayed pixel.
+ *
+ * mode 0 — translation: the pixel at the handle centre takes exactly what was
+ * at centre - d, so a handle placed at a feature's destination moves it there.
+ * mode 1 — radial scale about the centre; k > 0 magnifies.
+ *
+ * Handles compose by running the coordinate through each in turn.
  */
 vec2 applyWarp(vec2 uv) {
   vec2 p = toAspect(uv);
@@ -167,14 +184,9 @@ vec2 applyWarp(vec2 uv) {
     float dd = dot(d, d);
     float rr = hp.z * hp.z;
     if (dd >= rr) continue;
-    if (hp.w < 0.5) {
-      vec2 m = hq.xy;
-      float ratio = (rr - dd) / (rr - dd + dot(m, m) + 1e-9);
-      p -= ratio * ratio * m;
-    } else {
-      float t = sqrt(dd) / hp.z;
-      p = hp.xy + d * (1.0 - hq.z * (1.0 - t * t));
-    }
+    float fall = warpFalloff(sqrt(dd) / hp.z);
+    if (hp.w < 0.5) p -= hq.xy * fall;
+    else p = hp.xy + d * (1.0 - hq.z * fall);
   }
   return fromAspect(p);
 }

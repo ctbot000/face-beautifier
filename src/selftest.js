@@ -323,20 +323,37 @@ export function run(host = {}) {
     const cy = 0.5;
     const warps = [{ cx, cy, r, mode: 0, dx: d, dy: 0 }];
     const out = renderOnce(rend, ramp, black, { warps });
-
-    // At the handle's target the shader samples u = (c+d) - ratio^2 * d.
-    const ratio = (r * r - d * d) / (r * r - d * d + d * d);
-    const expectedU = cx + d - ratio * ratio * d;
-    const px = Math.round((cx + d) * SIZE);
     const y = Math.round(SIZE * 0.5);
-    const got = out[((SIZE - 1 - y) * SIZE + px) * 4] / 255;
-    near(got, expectedU, 0.02, 'warped sample');
-    note(`sampled ${got.toFixed(3)}, predicted ${expectedU.toFixed(3)}`);
+    const sampleAt = (u) => out[((SIZE - 1 - y) * SIZE + Math.round(u * SIZE)) * 4] / 255;
 
+    // The falloff is 1 at the centre, so the handle's fixed point is exact.
+    near(sampleAt(cx), cx - d, 0.02, 'sample at the handle centre');
+    // ...and 1 - t^2(3 - 2t) = 0.5 at half the radius, exactly.
+    near(sampleAt(cx + r * 0.5), cx + r * 0.5 - d * 0.5, 0.02, 'sample at half radius');
     // Outside the radius nothing may move.
-    const farX = Math.round((cx + r + 0.12) * SIZE);
-    const far = out[((SIZE - 1 - y) * SIZE + farX) * 4] / 255;
-    near(far, farX / (SIZE - 1), 0.02, 'pixel outside the warp radius');
+    const farU = cx + r + 0.12;
+    near(sampleAt(farU), farU, 0.02, 'pixel outside the warp radius');
+    note(`centre ${sampleAt(cx).toFixed(3)}, half-radius ${sampleAt(cx + r * 0.5).toFixed(3)}, outside ${sampleAt(farU).toFixed(3)}`);
+  });
+
+  test('The warp falloff cannot fold the backward map', () => {
+    // Axial backward map for one handle, r = 1. Every displacement the builder
+    // can emit must leave it strictly increasing, or the image creases.
+    const falloff = (t) => 1 - t * t * (3 - 2 * t);
+    const worstSlope = (m) => {
+      let worst = Infinity;
+      for (let i = -9999; i <= 9999; i++) {
+        const t = (i / 10000) * 0.99999;
+        const h = 1e-6;
+        const f = (x) => x - m * falloff(Math.abs(x));
+        worst = Math.min(worst, (f(t + h) - f(t - h)) / (2 * h));
+      }
+      return worst;
+    };
+    check(worstSlope(0.45) > 0.3, 'the 0.45r cap is not comfortably injective');
+    check(worstSlope(0.66) > 0, 'the falloff should hold to 2r/3');
+    check(worstSlope(0.8) < 0, 'the fold limit is higher than assumed — recheck the cap');
+    note(`min slope: 0.45r -> ${worstSlope(0.45).toFixed(3)}, 0.66r -> ${worstSlope(0.66).toFixed(3)}`);
   });
 
   test('Mask painter fills the right channel per region', () => {
@@ -415,8 +432,9 @@ export function run(host = {}) {
     let checked = 0;
     for (const w of warps) {
       if (w.mode !== 0) continue;
-      const before = Math.abs(w.cx - midX);
-      const after = Math.abs(w.cx + w.dx - midX);
+      // cx is the destination; cx - dx is where the jaw point started.
+      const before = Math.abs(w.cx - w.dx - midX);
+      const after = Math.abs(w.cx - midX);
       check(after <= before + 1e-6, `handle at ${w.cx.toFixed(3)} moved away from the midline`);
       checked++;
     }

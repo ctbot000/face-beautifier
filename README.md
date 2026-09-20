@@ -77,19 +77,28 @@ shader instead, because a soft radial falloff is what they want anyway.
 Without landmarks — model still loading, or offline — the shader falls back to a
 YCbCr skin-chroma test and keeps working on whatever is skin-coloured.
 
-**Reshaping.** Each handle is one step of Gustafsson's local image warp: the
-pixel at `c + d` takes the value that was at `c`, with a squared falloff that
-reaches zero on a circle of radius `r`.
+**Reshaping.** Jaw, chin, eyes, nose and lips are each a small set of local
+warp handles. A handle is a centre, a radius and either a displacement or a
+scale, applied as a backward map with a falloff that is 1 at the centre, 0 on
+the circle of radius `r`, **and flat at both ends**:
 
 ```glsl
-float ratio = (rr - dd) / (rr - dd + dot(m, m));
-p -= ratio * ratio * m;
+float fall = 1.0 - t * t * (3.0 - 2.0 * t);   // t = dist / r
+p -= d * fall;                                 // translate
+p = c + (p - c) * (1.0 - k * fall);            // or scale
 ```
 
-Handles compose by running the map through all of them in sequence, so a
-slimmed jaw and an enlarged eye do not fight. Displacement is capped at
-`0.45 * r`; past roughly half the radius the map folds over itself and the image
-tears.
+That last property is the whole point. The textbook version of this warp
+(Gustafsson's) uses `((r²-d²)/(r²-d²+|m|²))²`, which is steep at the rim:
+measured against its own axial backward map, it is **non-monotonic for every
+displacement below about `0.55 r`**, folding by up to `0.05 r` and leaving a
+faint ring just inside each handle — worst at small displacements, which is the
+opposite of what you would guess. A falloff that is flat at the rim cannot fold
+until `|d|` reaches `2r/3`, so the builder's `0.45 r` cap has a 1.5× margin.
+`?selftest=1` asserts all three of those numbers.
+
+Handles compose by running the coordinate through each in turn, so a slimmed jaw
+and an enlarged eye do not fight.
 
 **Colour space.** Every pass reads sRGB-encoded texels and writes sRGB-encoded
 texels. Nothing linearises, so nothing has to re-encode, and the gamma-space

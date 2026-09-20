@@ -8,12 +8,13 @@ const JAW_PICK = [1, 3, 4, 6, 7];
 /**
  * Builds the list of local warp handles for one frame.
  *
- * mode 0 — local translation: the pixel at `c + d` takes what was at `c`.
- * mode 1 — radial scale about `c`: `k > 0` magnifies.
+ * mode 0 — translation. `cx, cy` is where the feature should end up and `dx,
+ *          dy` is how far it travelled, so the shader's fixed point is exact.
+ * mode 1 — radial scale about `cx, cy`; `k > 0` magnifies.
  *
- * Each handle's displacement is capped well below its own radius; past roughly
- * half the radius Gustafsson's falloff folds the map over itself and the image
- * tears.
+ * Displacement is capped at 0.45r. The shader's falloff stays injective out to
+ * 2r/3, so that is a 1.5x margin; past the limit the backward map folds and the
+ * image creases.
  */
 export function buildWarps(face, p) {
   const out = [];
@@ -30,7 +31,7 @@ export function buildWarps(face, p) {
         const target = projectOnAxis(q, brow, axis);
         const dir = sub(target, q);
         const d = mul(norm(dir), Math.min(len(dir) * 0.9, width * 0.16 * p.slim * JAW_PROFILE[i]));
-        push(out, { cx: q[0], cy: q[1], r: radius, mode: 0, dx: d[0], dy: d[1] });
+        pushMove(out, q, d, radius);
       }
     }
   }
@@ -38,7 +39,7 @@ export function buildWarps(face, p) {
   if (Math.abs(p.chin) > 0.001) {
     // Positive shortens: the chin travels back up the face axis.
     const d = mul(axis, -p.chin * height * 0.085);
-    push(out, { cx: chin[0], cy: chin[1], r: width * 0.34, mode: 0, dx: d[0], dy: d[1] });
+    pushMove(out, chin, d, width * 0.34);
   }
 
   if (p.eyes > 0.001) {
@@ -56,16 +57,8 @@ export function buildWarps(face, p) {
   if (p.nose > 0.001) {
     const pull = p.nose * 0.30;
     for (const wing of [face.noseL, face.noseR]) {
-      const dir = sub(face.noseCenter, wing);
-      const d = mul(dir, pull);
-      push(out, {
-        cx: wing[0],
-        cy: wing[1],
-        r: Math.max(face.noseWidth * 1.0, width * 0.07),
-        mode: 0,
-        dx: d[0],
-        dy: d[1],
-      });
+      const d = mul(sub(face.noseCenter, wing), pull);
+      pushMove(out, wing, d, Math.max(face.noseWidth * 1.0, width * 0.07));
     }
   }
 
@@ -82,19 +75,22 @@ export function buildWarps(face, p) {
   return out;
 }
 
-function push(out, h) {
-  if (!(h.r > 1e-5)) return;
-  if (h.mode === 0) {
-    const d = Math.hypot(h.dx, h.dy);
-    if (d < 1e-6) return;
-    const cap = h.r * 0.45;
-    if (d > cap) {
-      h.dx *= cap / d;
-      h.dy *= cap / d;
-    }
-  } else if (Math.abs(h.k) < 1e-5) {
-    return;
+/** Moves whatever is at `from` to `from + d`, capped so the map cannot fold. */
+function pushMove(out, from, d, r) {
+  if (!(r > 1e-5)) return;
+  let [dx, dy] = d;
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-6) return;
+  const cap = r * 0.45;
+  if (length > cap) {
+    dx *= cap / length;
+    dy *= cap / length;
   }
+  out.push({ cx: from[0] + dx, cy: from[1] + dy, r, mode: 0, dx, dy });
+}
+
+function push(out, h) {
+  if (!(h.r > 1e-5) || Math.abs(h.k) < 1e-5) return;
   out.push(h);
 }
 
