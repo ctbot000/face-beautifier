@@ -1,0 +1,5 @@
+# Local agent state
+.claude/
+
+# Scratch files from local verification
+_tmp_*

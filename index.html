@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Face Beautifier — real-time camera retouching</title>
+<meta name="description" content="Real-time face beautification in the browser: GPU skin smoothing, face-shape warping and makeup driven by live face landmarks. Nothing leaves your device.">
+<meta name="theme-color" content="#0d0b14">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%E2%9C%A8%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <h1 class="brand"><span class="spark">✦</span> Face Beautifier</h1>
+    <div class="topbar-actions">
+      <span id="status" class="status" data-state="idle">Ready</span>
+      <span id="fps" class="fps" hidden>–– fps</span>
+      <button id="btn-panel" class="icon-btn only-narrow" aria-expanded="true" aria-controls="panel" title="Show or hide the controls">Controls</button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="stage-inner">
+      <canvas id="view" width="1280" height="720" aria-label="Beautified camera output"></canvas>
+
+      <div id="compare-handle" class="compare-handle" hidden>
+        <div class="compare-line"></div>
+        <div class="compare-grip" role="slider" tabindex="0" aria-label="Before / after split" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+          <span>◀</span><span>▶</span>
+        </div>
+        <div class="compare-tag compare-tag-l">Before</div>
+        <div class="compare-tag compare-tag-r">After</div>
+      </div>
+
+      <div id="overlay" class="overlay">
+        <div class="overlay-card">
+          <div class="overlay-emoji">✨</div>
+          <h2 id="overlay-title">Real-time face beautifier</h2>
+          <p id="overlay-text">Everything runs on your GPU, in this tab. No video is uploaded anywhere.</p>
+          <div class="overlay-buttons">
+            <button id="btn-start" class="primary">Start camera</button>
+            <button id="btn-photo" class="ghost">Use a photo instead</button>
+          </div>
+          <p id="overlay-note" class="overlay-note"></p>
+        </div>
+      </div>
+
+      <div id="loader" class="loader" hidden>
+        <div class="spinner"></div>
+        <span id="loader-text">Loading face model…</span>
+      </div>
+    </div>
+
+    <div class="stage-bar">
+      <button id="btn-compare" class="pill" title="Hold to see the original (or press and hold C)">Compare</button>
+      <button id="btn-split" class="pill" aria-pressed="false">Split view</button>
+      <button id="btn-mirror" class="pill" aria-pressed="true">Mirror</button>
+      <button id="btn-mesh" class="pill" aria-pressed="false" title="Show the region mask the shader uses">Mask</button>
+      <span class="spacer"></span>
+      <button id="btn-shot" class="pill accent">Snapshot</button>
+      <button id="btn-rec" class="pill">Record</button>
+    </div>
+  </main>
+
+  <aside class="panel" id="panel">
+    <div class="presets">
+      <span class="presets-label">Preset</span>
+      <div id="preset-row" class="preset-row"></div>
+    </div>
+    <div id="groups" class="groups"></div>
+    <div class="panel-foot">
+      <label class="select-row">
+        <span>Camera</span>
+        <select id="camera-select"><option value="">Default</option></select>
+      </label>
+      <label class="select-row">
+        <span>Quality</span>
+        <select id="quality-select">
+          <option value="1920">1080p</option>
+          <option value="1280" selected>720p</option>
+          <option value="960">540p</option>
+          <option value="640">360p (fastest)</option>
+        </select>
+      </label>
+      <button id="btn-reset" class="ghost wide">Reset all sliders</button>
+      <p class="privacy">Camera frames stay in this browser tab. The only network requests are for the face-landmark model.</p>
+    </div>
+  </aside>
+
+</div>
+
+<input id="file-input" type="file" accept="image/*" hidden>
+<a id="dl" hidden></a>
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
